@@ -79,6 +79,13 @@ bool SIM_IsPinADC(int index) {
 		return true;
 	return false;
 }
+static int g_simulatedVBAT = -1;
+void SIM_SetSimulatedVBAT(int v) {
+	g_simulatedVBAT = v;
+}
+int HAL_ADC_ReadVBAT(void) {
+	return g_simulatedVBAT;
+}
 void SIM_SetIntegerValueADCPin(int index, int v) {
 	g_simulatedADCValues[index] = v;
 }

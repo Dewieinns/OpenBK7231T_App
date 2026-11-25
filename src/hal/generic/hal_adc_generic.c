@@ -14,3 +14,8 @@ int __attribute__((weak)) HAL_ADC_Read(int pinNumber)
 {
 	return 0;
 }
+
+int __attribute__((weak)) HAL_ADC_ReadVBAT(void)
+{
+	return -1;
+}

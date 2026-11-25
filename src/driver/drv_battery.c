@@ -24,6 +24,16 @@ static float g_battvoltage = 0.0, g_battlevel = 0.0;
 static int g_lastbattvoltage = 0, g_lastbattlevel = 0;
 static float g_vref = 2400, g_vdivider = 2.29, g_maxbatt = 3000, g_minbatt = 2000, g_adcbits = 1 << ADC_RESOLUTION_BITS;
 static bool g_vdividerFromUser = false;
+// true when no pin has the BAT_ADC role and the chip's internal VBAT
+// channel is read instead (modules powered straight from the cell)
+static bool g_useVBAT = false;
+
+static int Batt_ReadRaw(void) {
+	if (g_useVBAT) {
+		return HAL_ADC_ReadVBAT();
+	}
+	return HAL_ADC_Read(g_pin_adc);
+}
 
 static void Batt_Measure() {
 	//this command has only been tested on CBU
@@ -31,7 +41,17 @@ static void Batt_Measure() {
 	int writeVal = 1;
 	int raw;
 	ADDLOG_INFO(LOG_FEATURE_DRV, "DRV_BATTERY: Measure Battery volt en perc");
-	g_pin_adc = PIN_FindPinIndexForRole(IOR_BAT_ADC, g_pin_adc);
+	{
+		int pin = PIN_FindPinIndexForRole(IOR_BAT_ADC, -1);
+		g_useVBAT = (pin == -1);
+		if (!g_useVBAT) {
+			g_pin_adc = pin;
+		}
+	}
+	if (g_useVBAT && HAL_ADC_ReadVBAT() < 0) {
+		ADDLOG_INFO(LOG_FEATURE_DRV, "DRV_BATTERY: no BAT_ADC pin set, and this platform has no internal VBAT reading");
+		return;
+	}
 	if (g_vdividerFromUser == false
 		&& PIN_FindPinIndexForRole(IOR_BAT_Relay, -1) == -1
 		&& PIN_FindPinIndexForRole(IOR_BAT_Relay_n, -1) == -1) {
@@ -53,7 +73,7 @@ static void Batt_Measure() {
 	}
 	// should be already initialized in pins
 	//HAL_ADC_Init(g_pin_adc);
-	g_battlevel = HAL_ADC_Read(g_pin_adc);
+	g_battlevel = Batt_ReadRaw();
 	if (g_battlevel < 1024) {
 		ADDLOG_INFO(LOG_FEATURE_DRV, "DRV_BATTERY: ADC Value low device not on battery");
 	}
@@ -64,7 +84,7 @@ static void Batt_Measure() {
 		}
 		rtos_delay_milliseconds(10);
 	}
-	raw = HAL_ADC_Read(g_pin_adc);
+	raw = Batt_ReadRaw();
 	// switch the divider back off on both paths, so a failed conversion
 	// cannot leave it powered until the next measurement
 	if (g_vdivider > 1) {
@@ -78,6 +98,7 @@ static void Batt_Measure() {
 		return;
 	}
 	g_battvoltage = raw;
+	ADDLOG_INFO(LOG_FEATURE_DRV, "DRV_BATTERY: raw ADC %i (%s)", raw, g_useVBAT ? "internal VBAT" : "BAT_ADC pin");
 	ADDLOG_DEBUG(LOG_FEATURE_DRV, "DRV_BATTERY: ADC binary Measurement: %f and channel %i", g_battvoltage, channel_adc);
 	ADDLOG_DEBUG(LOG_FEATURE_DRV, "DRV_BATTERY: Calculation with param: %f %f %f", g_vref, g_adcbits, g_vdivider);
 	// batt_value = batt_value / vref / 12bits value should be 10 un doc ... but on CBU is 12 ....
@@ -170,7 +191,7 @@ commandResult_t Battery_cycle(const void* context, const char* cmd, const char* 
 void Batt_Init() {
 
 	//cmddetail:{"name":"Battery_Setup","args":"[minbatt][maxbatt][V_divider][Vref][AD Bits]",
-	//cmddetail:"descr":"measure battery based on ADC. <br />req. args: minbatt in mv, maxbatt in mv. <br />optional: V_divider(2), Vref(default 2400), ADC bits(4096)",
+	//cmddetail:"descr":"measure battery based on ADC. <br />req. args: minbatt in mv, maxbatt in mv. <br />optional: V_divider(2), Vref(default 2400), ADC bits(4096). <br />If no pin has the BAT_ADC role, the chip's internal VBAT channel is measured instead (BK7231 family), for modules powered directly from the battery.",
 	//cmddetail:"fn":"Battery_Setup","file":"driver/drv_battery.c","requires":"",
 	//cmddetail:"examples":"Battery_Setup 1500 3000 2 2400 4096"}
 	CMD_RegisterCommand("Battery_Setup", Battery_Setup, NULL);

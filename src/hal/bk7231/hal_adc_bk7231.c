@@ -154,17 +154,10 @@ static UINT32 temp_single_get_enable(int ch)
     return SARADC_SUCCESS;
 }
 
-int HAL_ADC_Read(int pinNumber)
+static int HAL_ADC_ReadChannel(int channel)
 {
     UINT32 ret;
     int result;
-	int channel;
-
-	channel = gpioToAdc(pinNumber);
-
-	if(channel == -1) {
-		return -1;
-	}
 
     if(tmp_single_semaphore == NULL) {
         result = rtos_init_semaphore(&tmp_single_semaphore, 1);
@@ -184,3 +177,22 @@ int HAL_ADC_Read(int pinNumber)
     return -3;
 }
 
+int HAL_ADC_Read(int pinNumber)
+{
+	int channel;
+
+	channel = gpioToAdc(pinNumber);
+	// channel 0 is the internal VBAT input, not a pin; see HAL_ADC_ReadVBAT
+	if(channel <= 0) {
+		return -1;
+	}
+	return HAL_ADC_ReadChannel(channel);
+}
+
+// ADC0 measures the chip's own supply. On battery devices that run the
+// module straight from the cell (no regulator), this is the battery voltage,
+// so no external divider is needed.
+int HAL_ADC_ReadVBAT(void)
+{
+	return HAL_ADC_ReadChannel(0);
+}

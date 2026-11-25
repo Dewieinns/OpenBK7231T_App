@@ -12,6 +12,7 @@ extern "C" {
 	bool SIM_IsPinADC(int index);
 	void SIM_SetVoltageOnADCPin(int index, float v);
 	void SIM_SetIntegerValueADCPin(int index, int v);
+	void SIM_SetSimulatedVBAT(int v);
 	int SIM_GetPWMValue(int index);
 	// flash control simulation
 	void SIM_SetupFlashFileReading(const char *flashPath);

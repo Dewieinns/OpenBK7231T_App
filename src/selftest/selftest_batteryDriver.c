@@ -42,8 +42,38 @@ void Test_Battery_SmokeSensor() {
 	// assert: current ,expected, max difference
 	SELFTEST_ASSERT_FLOATCOMPAREEPSILON(Battery_lastreading(OBK_BATT_LEVEL), 0, 5.0f);
 }
+// No BAT_ADC pin: the module runs straight from the cell (e.g. CB3S leak
+// sensors), so the driver reads the chip's internal VBAT channel instead.
+void Test_Battery_InternalVBAT() {
+	SIM_ClearOBK(0);
+
+	CMD_ExecuteCommand("startDriver Battery", 0);
+	CMD_ExecuteCommand("Battery_Setup 2000 3000 2 2400 4096", 0);
+
+	// raw 2560 -> 2560 * 2400 / 4096 * 2 = 3000 mV -> 100%
+	SIM_SetSimulatedVBAT(2560);
+	Simulator_Force_Batt_Measure();
+	SELFTEST_ASSERT_FLOATCOMPAREEPSILON(Battery_lastreading(OBK_BATT_VOLTAGE), 3000, 5);
+	SELFTEST_ASSERT_FLOATCOMPAREEPSILON(Battery_lastreading(OBK_BATT_LEVEL), 100, 1.0f);
+
+	// raw 2134 -> 2500 mV -> 50%
+	SIM_SetSimulatedVBAT(2134);
+	Simulator_Force_Batt_Measure();
+	SELFTEST_ASSERT_FLOATCOMPAREEPSILON(Battery_lastreading(OBK_BATT_VOLTAGE), 2500, 5);
+	SELFTEST_ASSERT_FLOATCOMPAREEPSILON(Battery_lastreading(OBK_BATT_LEVEL), 50, 1.0f);
+
+	// a BAT_ADC pin still takes priority over the internal channel
+	PIN_SetPinRoleForPinIndex(23, IOR_BAT_ADC);
+	PIN_SetPinChannelForPinIndex(23, 5);
+	SIM_SetIntegerValueADCPin(23, 1707);
+	Simulator_Force_Batt_Measure();
+	SELFTEST_ASSERT_FLOATCOMPAREEPSILON(Battery_lastreading(OBK_BATT_VOLTAGE), 2000, 5);
+
+	SIM_SetSimulatedVBAT(-1);
+}
 void Test_Battery() {
 	Test_Battery_SmokeSensor();
+	Test_Battery_InternalVBAT();
 
 }
 
