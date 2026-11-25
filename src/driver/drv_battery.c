@@ -28,11 +28,31 @@ static bool g_vdividerFromUser = false;
 // channel is read instead (modules powered straight from the cell)
 static bool g_useVBAT = false;
 
-static int Batt_ReadRaw(void) {
+static int Batt_ReadOne(void) {
 	if (g_useVBAT) {
 		return HAL_ADC_ReadVBAT();
 	}
 	return HAL_ADC_Read(g_pin_adc);
+}
+
+// Median of several conversions: single samples taken while WiFi transmits
+// can be off by several percent, which makes the battery level jump around.
+#define BATT_SAMPLES 7
+static int Batt_ReadRaw(void) {
+	int s[BATT_SAMPLES];
+	int i, j, v;
+	for (i = 0; i < BATT_SAMPLES; i++) {
+		v = Batt_ReadOne();
+		if (v < 0) {
+			return v;
+		}
+		// insertion sort as we go
+		for (j = i; j > 0 && s[j - 1] > v; j--) {
+			s[j] = s[j - 1];
+		}
+		s[j] = v;
+	}
+	return s[BATT_SAMPLES / 2];
 }
 
 static void Batt_Measure() {
